@@ -3,6 +3,6 @@ pages_build_output_dir = "dist"
 compatibility_date = "2026-06-01"
 
 [[d1_databases]]
-binding = "DB"
+binding = "dave_db"
 database_name = "dave-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "1f8f408b-f569-4bff-8d69-4fcea5a84c6e"
