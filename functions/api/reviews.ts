@@ -27,6 +27,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       await env.DB.prepare('INSERT INTO evidence (scorecard_id, quote, sentiment) VALUES (?, ?, ?)').bind(cardId, ev.quote, ev.sentiment).run();
     }
   }
-  await env.DB.prepare('UPDATE projects SET updated_at = CUDENT_TIMESTAMP WHERE id = ?').bind(projectId).run();
+  await env.DB.prepare('UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(projectId).run();
   return json({ review_id: reviewId, reviewer, analysis });
 };
