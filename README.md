@@ -75,3 +75,15 @@ Without the right URL parameter, the app renders a blank lock screen.
 This first version uses a local heuristic analyser rather than a paid LLM API. That makes it fast, private-ish, and free to run. The scoring criteria are intentionally easy to tune over time.
 # Dave
 # Dave
+
+
+## Token debug build
+
+If Dave shows a locked page, it now displays safe diagnostics for the URL gate.
+
+For the current public URL, Cloudflare Pages should have these build variables set before deploy:
+
+- `VITE_TOKEN_PARAM=darling`
+- `VITE_APP_TOKEN=BigDaveRules2026`
+
+Important: Vite variables are baked into the client bundle at build time. After changing Cloudflare Variables and Secrets, redeploy the Pages project.
