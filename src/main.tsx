@@ -16,7 +16,7 @@ type SortKey = 'overall_signal' | 'review_count' | 'confidence' | 'release_date'
 
 const TOKEN = import.meta.env.VITE_APP_TOKEN || '2343546';
 const TOKEN_PARAM = import.meta.env.VITE_TOKEN_PARAM || 'x';
-const VERSION = 'v0.6';
+const VERSION = 'v0.7';
 
 const iconMap: Record<string, React.ReactNode> = {
   song: <Radio size={18} />, entertainment: <Sparkles size={18} />, world: <Film size={18} />, curiosity: <Eye size={18} />,
