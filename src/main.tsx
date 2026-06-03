@@ -16,7 +16,7 @@ type SortKey = 'overall_signal' | 'review_count' | 'confidence' | 'release_date'
 
 const TOKEN = import.meta.env.VITE_APP_TOKEN || '2343546';
 const TOKEN_PARAM = import.meta.env.VITE_TOKEN_PARAM || 'x';
-const VERSION = 'v0.7';
+const VERSION = 'v0.8';
 
 const iconMap: Record<string, React.ReactNode> = {
   song: <Radio size={18} />, entertainment: <Sparkles size={18} />, world: <Film size={18} />, curiosity: <Eye size={18} />,
@@ -101,6 +101,74 @@ function lessons(cardGroups: ReturnType<typeof groupCards>, evidence: Evidence[]
   const quote = evidence[0]?.quote;
   if (quote) out.push(`Strongest current evidence: “${quote}”`);
   return out.slice(0,5);
+}
+
+
+function strongestMetric(projects: Project[], key: SortKey) {
+  const valid = projects.filter(p => Number((p as any)[key] || 0) > 0);
+  if (!valid.length) return null;
+  return [...valid].sort((a,b) => metric(b,key) - metric(a,key))[0];
+}
+function weakestMetric(projects: Project[], key: SortKey) {
+  const valid = projects.filter(p => Number((p as any)[key] || 0) > 0);
+  if (!valid.length) return null;
+  return [...valid].sort((a,b) => metric(a,key) - metric(b,key))[0];
+}
+function metricName(key: SortKey) {
+  const found = summaryColumns.find(c => c.key === key);
+  return found?.label || key;
+}
+function intelligenceBriefing(projects: Project[]) {
+  const reviewed = projects.filter(p => Number(p.review_count || 0) > 0);
+  const totalReviews = reviewed.reduce((sum,p)=>sum + Number(p.review_count || 0), 0);
+  const metricKeys: SortKey[] = ['overall_signal','porter','curiosity','story','synergy','resistance','entertainment','world','memorability'];
+  const averages = metricKeys.map(key => ({ key, avg: avg(reviewed.map(p => metric(p, key)).filter(Boolean)) })).filter(x => x.avg > 0).sort((a,b)=>b.avg-a.avg);
+  const topMetric = averages[0];
+  const weakMetric = averages[averages.length - 1];
+  const bestProject = strongestMetric(reviewed, 'overall_signal');
+  const mostEvidence = [...reviewed].sort((a,b)=>Number(b.review_count||0)-Number(a.review_count||0))[0] || null;
+  const friction = avg(reviewed.map(p => metric(p, 'friction')).filter(Boolean));
+  const lowSample = reviewed.filter(p => Number(p.review_count || 0) < 5).length;
+
+  if (!reviewed.length) {
+    return {
+      headline: 'Dave has no witness statements yet.',
+      body: 'Add feedback to a project and Dave will begin looking for catalogue-wide audience patterns.',
+      bullets: ['No projects with reviews yet.', 'No portfolio signal available yet.', 'The prison analyst remains idle.'],
+      bestProject: null,
+      totalReviews: 0
+    };
+  }
+
+  const headline = bestProject
+    ? `${bestProject.name} currently leads the portfolio at ${metric(bestProject,'overall_signal')}% overall signal.`
+    : 'The portfolio signal is starting to form.';
+  const body = `Dave has analysed ${totalReviews} review${totalReviews === 1 ? '' : 's'} across ${reviewed.length} project${reviewed.length === 1 ? '' : 's'}. ${topMetric ? `The strongest recurring audience signal is ${metricName(topMetric.key).toLowerCase()} at ${topMetric.avg}%.` : ''} ${weakMetric ? `The weakest recurring signal is ${metricName(weakMetric.key).toLowerCase()} at ${weakMetric.avg}%, which is probably the best place to look for improvement.` : ''} ${friction >= 60 ? `Friction is running hot at ${friction}%, so repeated complaints should be treated as useful evidence rather than noise.` : `Friction is not yet dominating the catalogue, which suggests the projects are generally landing more than they are confusing people.`}`;
+  const bullets = [
+    bestProject ? `Best current project signal: ${bestProject.name} at ${metric(bestProject,'overall_signal')}%.` : '',
+    topMetric ? `Strongest recurring metric: ${metricName(topMetric.key)} at ${topMetric.avg}%.` : '',
+    weakMetric ? `Weakest recurring metric: ${metricName(weakMetric.key)} at ${weakMetric.avg}%.` : '',
+    mostEvidence ? `Most evidence-rich project: ${mostEvidence.name} with ${mostEvidence.review_count} review${Number(mostEvidence.review_count) === 1 ? '' : 's'}.` : '',
+    lowSample ? `${lowSample} project${lowSample === 1 ? '' : 's'} still ${lowSample === 1 ? 'has' : 'have'} a low sample size, so treat those scores as early signal.` : 'Most projects have enough evidence to begin comparing patterns.'
+  ].filter(Boolean);
+  return { headline, body, bullets, bestProject, totalReviews };
+}
+function IntelligenceBriefing({projects}:{projects:Project[]}) {
+  const intel = intelligenceBriefing(projects);
+  const topStory = strongestMetric(projects, 'story');
+  const topCuriosity = strongestMetric(projects, 'curiosity');
+  const topSynergy = strongestMetric(projects, 'synergy');
+  return <section className="panel intelligencePanel">
+    <div className="intelHeader">
+      <div><p className="eyebrow">Dave's Intelligence Briefing</p><h2>{intel.headline}</h2></div>
+      <div className="intelStat"><span>{intel.totalReviews}</span><small>Total reviews</small></div>
+    </div>
+    <p>{intel.body}</p>
+    <div className="intelGrid">
+      <div><b>What we learned</b><ul>{intel.bullets.map((b,i)=><li key={i}>{b}</li>)}</ul></div>
+      <div className="bestInClass"><b>Best in class</b><div>{topStory ? <span>Story <strong>{topStory.name} · {metric(topStory,'story')}%</strong></span> : null}{topCuriosity ? <span>Curiosity <strong>{topCuriosity.name} · {metric(topCuriosity,'curiosity')}%</strong></span> : null}{topSynergy ? <span>Synergy <strong>{topSynergy.name} · {metric(topSynergy,'synergy')}%</strong></span> : null}</div></div>
+    </div>
+  </section>;
 }
 
 function App() {
@@ -206,6 +274,7 @@ function App() {
       {error && <div className="error">{error}</div>}
       <div className="summaryHead slim"><div></div><button onClick={()=>setShowProjectForm(v=>!v)}><Plus size={16}/> New Project</button></div>
       {showProjectForm && <ProjectForm {...{newProject,setNewProject,artist,setArtist,youtubeUrl,setYoutubeUrl,releaseDate,setReleaseDate,busy,saveProject,setShowProjectForm}} />}
+      <IntelligenceBriefing projects={projects} />
       <ProjectTable projects={sortedProjects} sortKey={sortKey} sortDir={sortDir} changeSort={changeSort} openProject={(id)=>setProjectId(id)} />
     </main>
   </div>;
