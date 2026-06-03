@@ -9,29 +9,8 @@ type Scorecard = { id: number; review_id: number; card_key: string; card_name: s
 type Evidence = { id: number; scorecard_id: number; card_key: string; card_name: string; review_id: number; reviewer: string; quote: string; sentiment: string; source_url?: string; review_created_at: string };
 type Dashboard = { project: Project | null; reviews: Review[]; cards: Scorecard[]; evidence: Evidence[] };
 
-const APP_VERSION = '0.2-token-debug';
 const TOKEN = import.meta.env.VITE_APP_TOKEN || '2343546';
 const TOKEN_PARAM = import.meta.env.VITE_TOKEN_PARAM || 'x';
-
-function maskValue(value: string | null) {
-  if (!value) return '(missing)';
-  if (value.length <= 4) return '••••';
-  return `${value.slice(0, 2)}${'•'.repeat(Math.max(2, value.length - 4))}${value.slice(-2)}`;
-}
-
-function tokenDiagnostics() {
-  const params = new URLSearchParams(window.location.search);
-  const actual = params.get(TOKEN_PARAM);
-  const allParams = [...params.entries()].map(([key, value]) => ({ key, value }));
-  return {
-    tokenParam: TOKEN_PARAM,
-    expectedTokenLength: TOKEN.length,
-    actualTokenLength: actual?.length || 0,
-    actualMasked: maskValue(actual),
-    match: actual === TOKEN,
-    allParams
-  };
-}
 
 const iconMap: Record<string, React.ReactNode> = {
   song: <Radio size={18} />, entertainment: <Sparkles size={18} />, world: <Film size={18} />, curiosity: <Eye size={18} />,
@@ -40,7 +19,8 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 function gateOpen() {
-  return tokenDiagnostics().match;
+  const params = new URLSearchParams(window.location.search);
+  return params.get(TOKEN_PARAM) === TOKEN;
 }
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...options, headers: { 'content-type': 'application/json', ...(options?.headers || {}) } });
@@ -127,35 +107,11 @@ function App() {
   useEffect(() => { loadProjects().catch(e => setError(e.message)); }, []);
   useEffect(() => { if (projectId) loadDashboard(projectId).catch(e => setError(e.message)); }, [projectId]);
 
-  if (locked) {
-    const diag = tokenDiagnostics();
-    return <div className="locked">
-      <div className="lockPanel">
-        <div className="lockIcon"><Lock size={22} /></div>
-        <h1>Dave is locked</h1>
-        <p>The URL token did not match the Cloudflare build variables.</p>
-        <div className="diagGrid">
-          <div><span>App version</span><b>{APP_VERSION}</b></div>
-          <div><span>Expected param name</span><b>{diag.tokenParam}</b></div>
-          <div><span>Expected token length</span><b>{diag.expectedTokenLength}</b></div>
-          <div><span>URL token length</span><b>{diag.actualTokenLength}</b></div>
-          <div><span>URL token masked</span><b>{diag.actualMasked}</b></div>
-          <div><span>Token match</span><b>{diag.match ? 'YES' : 'NO'}</b></div>
-        </div>
-        <div className="paramBox">
-          <b>URL parameters seen by Dave</b>
-          {diag.allParams.length === 0
-            ? <code>none</code>
-            : diag.allParams.map(({ key, value }) => <code key={key}>{key}={maskValue(value)}</code>)}
-        </div>
-        <p className="lockHint">Cloudflare Pages note: VITE_* values are baked in at build time. After changing Variables and Secrets, redeploy the site. For your current URL, Cloudflare should have <code>VITE_TOKEN_PARAM=darling</code> and <code>VITE_APP_TOKEN=BigDaveRules2026</code>.</p>
-      </div>
-    </div>;
-  }
+  if (locked) return <div className="locked"><Lock size={22} /></div>;
 
   return <div className="app">
     <aside className="sidebar">
-      <div className="brand"><div className="brandMark">D</div><div><h1>Dave</h1><p>Audience Decoder {APP_VERSION}</p></div></div>
+      <div className="brand"><div className="brandMark">D</div><div><h1>Dave</h1><p>Audience Decoder v0.1</p></div></div>
       <label>Project</label>
       <select value={projectId || ''} onChange={e => setProjectId(Number(e.target.value))}>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
