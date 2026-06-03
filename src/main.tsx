@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BarChart3, Brain, Eye, Film, Flame, Gauge, Lock, MessageSquare, Plus, Radio, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { BarChart3, Brain, ExternalLink, Eye, Film, Flame, Gauge, Lock, MessageSquare, Plus, Radio, Sparkles, Trash2 } from 'lucide-react';
 import './styles.css';
 
-type Project = { id: number; name: string; artist?: string; notes?: string };
+type Project = { id: number; name: string; artist?: string; notes?: string; youtube_url?: string; release_date?: string; review_count?: number; overall_signal?: number; last_reviewed_at?: string };
 type Review = { id: number; reviewer: string; raw_text: string; summary: string; source_url?: string; created_at: string };
 type Scorecard = { id: number; review_id: number; card_key: string; card_name: string; score: number; confidence: number; reasoning: string; reviewer: string; raw_text: string; source_url?: string; review_created_at: string };
 type Evidence = { id: number; scorecard_id: number; card_key: string; card_name: string; review_id: number; reviewer: string; quote: string; sentiment: string; source_url?: string; review_created_at: string };
@@ -25,9 +25,9 @@ function gateOpen() {
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...options, headers: { 'content-type': 'application/json', ...(options?.headers || {}) } });
   if (!res.ok) {
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  throw new Error(data.error || res.statusText);
-}
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || res.statusText);
+  }
   return res.json();
 }
 function scoreClass(score: number, key?: string) {
@@ -47,6 +47,16 @@ function groupCards(cards: Scorecard[]) {
 function seedText() {
   return `Andy Dolphin\nR7: well that was a treat! Nice catchy melody and mix sounds spot on, everything clear and in its place. The talking during the song could be met with mixed opinions, but I see it as if it’s a scene in a film with a song playing over. And yes, I get the ‘hello darling’ bit 😄`;
 }
+function safeDate(value?: string) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function youtubeHref(url?: string) {
+  if (!url) return '';
+  try { return new URL(url).toString(); } catch { return ''; }
+}
 
 function App() {
   const [locked] = useState(!gateOpen());
@@ -54,21 +64,21 @@ function App() {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [newProject, setNewProject] = useState('Escape');
   const [artist, setArtist] = useState('The Unspoken Misfits');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [releaseDate, setReleaseDate] = useState('');
   const [raw, setRaw] = useState('');
-  const [reviewer, setReviewer] = useState('');
-  const [sourceUrl, setSourceUrl] = useState('');
   const [dashboard, setDashboard] = useState<Dashboard>({ project: null, reviews: [], cards: [], evidence: [] });
   const [selected, setSelected] = useState<string>('porter');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const selectedEvidence = useMemo(() => dashboard.evidence.filter(e => e.card_key === selected), [dashboard.evidence, selected]);
-  const selectedCards = useMemo(() => dashboard.cards.filter(c => c.card_key === selected), [dashboard.cards, selected]);
   const cardGroups = useMemo(() => groupCards(dashboard.cards), [dashboard.cards]);
   const overall = useMemo(() => {
     const list = cardGroups.filter(c => !['friction'].includes(c.key));
     return avg(list.map(c => c.avg));
   }, [cardGroups]);
+  const projectVideo = youtubeHref(dashboard.project?.youtube_url);
 
   async function loadProjects() {
     if (locked) return;
@@ -85,7 +95,8 @@ function App() {
   async function createProject() {
     setBusy(true); setError('');
     try {
-      const p = await api<Project>('/api/projects', { method: 'POST', body: JSON.stringify({ name: newProject, artist }) });
+      const p = await api<Project>('/api/projects', { method: 'POST', body: JSON.stringify({ name: newProject, artist, youtube_url: youtubeUrl, release_date: releaseDate }) });
+      setNewProject(''); setYoutubeUrl(''); setReleaseDate('');
       await loadProjects(); setProjectId(p.id); await loadDashboard(p.id);
     } catch (e:any) { setError(e.message); } finally { setBusy(false); }
   }
@@ -93,14 +104,14 @@ function App() {
     if (!projectId || !raw.trim()) return;
     setBusy(true); setError('');
     try {
-      await api('/api/reviews', { method: 'POST', body: JSON.stringify({ project_id: projectId, raw_text: raw, reviewer, source_url: sourceUrl }) });
-      setRaw(''); setReviewer(''); setSourceUrl(''); await loadDashboard(projectId);
+      await api('/api/reviews', { method: 'POST', body: JSON.stringify({ project_id: projectId, raw_text: raw, reviewer: '', source_url: '' }) });
+      setRaw(''); await loadDashboard(projectId); await loadProjects();
     } catch (e:any) { setError(e.message); } finally { setBusy(false); }
   }
   async function deleteReview(id: number) {
     if (!confirm('Delete this review and its scorecards?')) return;
     setBusy(true);
-    try { await api('/api/review-delete', { method: 'POST', body: JSON.stringify({ id }) }); await loadDashboard(projectId); }
+    try { await api('/api/review-delete', { method: 'POST', body: JSON.stringify({ id }) }); await loadDashboard(projectId); await loadProjects(); }
     finally { setBusy(false); }
   }
 
@@ -111,23 +122,31 @@ function App() {
 
   return <div className="app">
     <aside className="sidebar">
-      <div className="brand"><div className="brandMark">D</div><div><h1>Dave</h1><p>Audience Decoder v0.1</p></div></div>
-      <label>Project</label>
-      <select value={projectId || ''} onChange={e => setProjectId(Number(e.target.value))}>
-        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
+      <div className="brand"><div className="brandMark">D</div><div><h1>Dave</h1><p>Audience Decoder v0.4</p></div></div>
+      <label>Projects</label>
+      <div className="projectList">
+        {projects.map(p => <button key={p.id} className={`projectRow ${projectId === p.id ? 'active' : ''} ${scoreClass(Number(p.overall_signal || 0))}`} onClick={() => setProjectId(p.id)}>
+          <span><b>{p.name}</b><small>{p.artist || 'Unknown artist'} · {Number(p.review_count || 0)} reviews</small></span>
+          <strong>{Number(p.overall_signal || 0)}%</strong>
+        </button>)}
+      </div>
       <div className="newProject">
+        <label>New project</label>
         <input value={newProject} onChange={e => setNewProject(e.target.value)} placeholder="Project name" />
         <input value={artist} onChange={e => setArtist(e.target.value)} placeholder="Artist" />
-        <button onClick={createProject} disabled={busy}><Plus size={16}/> New Project</button>
+        <input value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} placeholder="YouTube URL" />
+        <input value={releaseDate} onChange={e => setReleaseDate(e.target.value)} placeholder="Release date" type="date" />
+        <button onClick={createProject} disabled={busy || !newProject.trim()}><Plus size={16}/> New Project</button>
       </div>
-      <button className="ghost" onClick={() => projectId && loadDashboard(projectId)}><RefreshCw size={16}/> Refresh</button>
-      <div className="hint"><b>URL gate:</b><br/>Set <code>VITE_APP_TOKEN</code> and open with <code>?{TOKEN_PARAM}=token</code>.</div>
     </aside>
 
     <main>
       <section className="hero">
-        <div><p className="eyebrow">{dashboard.project?.artist || 'Audience signal'}</p><h2>{dashboard.project?.name || 'No Project Selected'}</h2></div>
+        <div>
+          <p className="eyebrow">{dashboard.project?.artist || 'Audience signal'}</p>
+          <h2>{dashboard.project?.name || 'No Project Selected'}</h2>
+          {projectVideo && <a className="watchLink" href={projectVideo} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Open on YouTube</a>}
+        </div>
         <div className={`overall ${scoreClass(overall)}`}><span>{overall}%</span><small>Overall Signal</small></div>
       </section>
       {error && <div className="error">{error}</div>}
@@ -144,20 +163,18 @@ function App() {
       <section className="panel twoCol">
         <div>
           <h3>Paste Feedback</h3>
-          <p className="muted">Paste the raw Facebook review. First line can be the reviewer name. The app will score and store the evidence.</p>
-          <div className="row"><input value={reviewer} onChange={e=>setReviewer(e.target.value)} placeholder="Reviewer override (optional)"/><input value={sourceUrl} onChange={e=>setSourceUrl(e.target.value)} placeholder="Link to full feedback (optional)"/></div>
+          <p className="muted">Paste the raw review. First line can be the reviewer name. Dave will score and store the evidence.</p>
           <textarea value={raw} onChange={e=>setRaw(e.target.value)} placeholder={seedText()} />
-          <div className="actions"><button onClick={addReview} disabled={busy || !projectId || !raw.trim()}><Sparkles size={16}/> Add & Analyse</button><button className="ghost" onClick={()=>setRaw(seedText())}>Load example</button></div>
+          <div className="actions"><button onClick={addReview} disabled={busy || !projectId || !raw.trim()}><Sparkles size={16}/> Add & Analyse</button></div>
         </div>
         <div>
           <h3>{cardGroups.find(c=>c.key===selected)?.name || 'Evidence'} Evidence</h3>
-          <p className="muted">Snippets that generated this card. Click source links when you add them.</p>
+          <p className="muted">Snippets that generated this card. The witness statements, basically.</p>
           <div className="evidenceList">
-            {selectedEvidence.length === 0 && <div className="empty">No evidence yet. Paste a review and let Dave have a look.</div>}
+            {selectedEvidence.length === 0 && <div className="empty">No evidence yet. Dave remains unconvinced.</div>}
             {selectedEvidence.map(e => <div className={`evidence ${e.sentiment}`} key={e.id}>
-              <div><b>{e.reviewer}</b><span>{new Date(e.review_created_at).toLocaleString()}</span></div>
+              <div><b>{e.reviewer}</b>{safeDate(e.review_created_at) && <span>{safeDate(e.review_created_at)}</span>}</div>
               <p>“{e.quote}”</p>
-              {e.source_url && <a href={e.source_url} target="_blank">Open full feedback</a>}
             </div>)}
           </div>
         </div>
@@ -167,7 +184,7 @@ function App() {
         <h3>Reviews</h3>
         <div className="reviewList">
           {dashboard.reviews.map(r => <article key={r.id} className="review">
-            <div className="reviewHead"><b>{r.reviewer}</b><span>{new Date(r.created_at).toLocaleString()}</span><button onClick={()=>deleteReview(r.id)} className="iconBtn"><Trash2 size={15}/></button></div>
+            <div className="reviewHead"><b>{r.reviewer}</b>{safeDate(r.created_at) && <span>{safeDate(r.created_at)}</span>}<button onClick={()=>deleteReview(r.id)} className="iconBtn"><Trash2 size={15}/></button></div>
             <p className="summary">{r.summary}</p>
             <details><summary>Full feedback</summary><pre>{r.raw_text}</pre></details>
           </article>)}

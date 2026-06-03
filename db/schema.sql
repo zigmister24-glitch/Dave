@@ -3,8 +3,10 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   artist TEXT DEFAULT '',
   notes TEXT DEFAULT '',
-  created_at TEXT DEFAULT CUDENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CUDENT_TIMESTAMP
+  youtube_url TEXT DEFAULT '',
+  release_date TEXT DEFAULT '',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS reviews (
@@ -14,7 +16,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   source_url TEXT DEFAULT '',
   raw_text TEXT NOT NULL,
   summary TEXT DEFAULT '',
-  created_at TEXT DEFAULT CUDENT_TIMESTAMP,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
@@ -26,7 +28,7 @@ CREATE TABLE IF NOT EXISTS scorecards (
   score INTEGER NOT NULL,
   confidence INTEGER NOT NULL,
   reasoning TEXT DEFAULT '',
-  created_at TEXT DEFAULT CUDENT_TIMESTAMP,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(review_id) REFERENCES reviews(id) ON DELETE CASCADE
 );
 
@@ -35,7 +37,7 @@ CREATE TABLE IF NOT EXISTS evidence (
   scorecard_id INTEGER NOT NULL,
   quote TEXT NOT NULL,
   sentiment TEXT DEFAULT 'neutral',
-  created_at TEXT DEFAULT CUDENT_TIMESTAMP,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(scorecard_id) REFERENCES scorecards(id) ON DELETE CASCADE
 );
 
